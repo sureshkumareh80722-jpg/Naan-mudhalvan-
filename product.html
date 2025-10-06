@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="productApp">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase 3 - Product Catalog (AngularJS)</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f2f2f2; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    .catalog { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+    .card { background: white; padding: 15px; border-radius: 8px; width: 200px; text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .price { color: green; font-weight: bold; }
+  </style>
+</head>
+<body ng-controller="ProductController">
+S
+  <h1>🛍 Product Catalog - Phase 3 Demo</h1>
+
+  <!-- Simple Dropdown Filter -->
+  <div style="text-align:center; margin-bottom:15px;">
+    <select ng-model="selectedCategory" ng-change="filterCategory()">
+      <option value="All">All Categories</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Fashion">Fashion</option>
+    </select>
+  </div>
+
+  <!-- Product Cards -->
+  <div class="catalog">
+    <div class="card" ng-repeat="p in filteredProducts">
+      <h3>{{p.name}}</h3>
+      <p>{{p.category}}</p>
+      <p class="price">₹{{p.price}}</p>
+    </div>
+  </div>
+
+  <script>
+    const app = angular.module("productApp", []);
+
+    app.controller("ProductController", function($scope) {
+      $scope.products = [
+        { name: "Laptop", category: "Electronics", price: 95000 },
+        { name: "Headphones", category: "Electronics", price: 2000 },
+        { name: "T-Shirt", category: "Fashion", price: 800 }
+      ];
+
+      $scope.selectedCategory = "All";
+
+      $scope.filterCategory = function() {
+        if ($scope.selectedCategory === "All") {
+          $scope.filteredProducts = $scope.products;
+        } else {
+          $scope.filteredProducts = $scope.products.filter(
+            p => p.category === $scope.selectedCategory
+          );
+        }
+      };
+
+      // Initial display
+      $scope.filterCategory();
+    });
+  </script>
+
+</body>
+</html>
