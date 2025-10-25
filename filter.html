@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="productApp">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase 5 - Product Catalog with Rating</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f4f4; transition: 0.3s; }
+    .dark-mode { background-color: #1e1e1e; color: #f1f1f1; }
+    header { background: #0078d7; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+    header input { padding: 6px; border-radius: 4px; border: none; width: 180px; }
+    .toggle-btn, .btn { border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+    .toggle-btn { background: white; color: #0078d7; }
+    .btn { background: #0078d7; color: white; }
+    .catalog { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 20px; }
+    .card { background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+       padding: 15px; width: 220px; text-align: center; transition: transform 0.3s; }
+    .dark-mode .card { background: #2c2c2c; color: #fff; }
+    .card:hover { transform: translateY(-5px); }
+    .card img { width: 100%; height: 150px; border-radius: 8px; object-fit: cover; }
+    .price { color: green; font-weight: bold; }
+    .controls { text-align: center; margin: 15px; }
+    .cart, .wishlist { position: fixed; top: 80px; right: 20px; width: 250px; 
+      background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); 
+      max-height: 400px; overflow-y: auto; display: none; }
+    .dark-mode .cart, .dark-mode .wishlist { background: #2c2c2c; color: #fff; }
+    .cart.open, .wishlist.open { display: block; }
+    .wishlist-btn { background: none; border: none; color: red; font-size: 20px; cursor: pointer; }
+    .star { font-size: 20px; color: #ccc; cursor: pointer; transition: 0.2s; }
+    .star.selected { color: gold; }
+    .pagination { text-align: center; margin: 20px; }
+  </style>
+</head>
+
+<body ng-controller="ProductController" ng-class="{'dark-mode': darkMode}">
+
+  <header>
+    <h1>🛍 Product Catalog</h1>
+    <div>
+      <input type="text" ng-model="searchText" placeholder="Search...">
+      <button class="toggle-btn" ng-click="toggleMode()">{{darkMode ? '☀ Light' : '🌙 Dark'}}</button>
+      <button class="btn" ng-click="toggleCart()">🛒 ({{cart.length}})</button>
+      <button class="btn" ng-click="toggleWishlist()">❤️ ({{wishlist.length}})</button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <select ng-model="selectedCategory" ng-change="applyFilters()">
+      <option value="All">All Categories</option>
+      <option ng-repeat="cat in categories">{{cat}}</option>
+    </select>
+
+    <select ng-model="sortOption" ng-change="applyFilters()">
+      <option value="none">Sort By</option>
+      <option value="priceLow">Price: Low → High</option>
+      <option value="priceHigh">Price: High → Low</option>
+      <option value="ratingHigh">Rating: High → Low</option>
+    </select>
+
+    <div>
+      Price Range: ₹{{minPrice}} - ₹{{maxPrice}}
+      <input type="range" min="0" max="100000" step="1000" ng-model="maxPrice" ng-change="applyFilters()">
+    </div>
+  </div>
+
+  <!-- Product Grid -->
+  <div class="catalog">
+    <div class="card" ng-repeat="p in paginatedProducts | filter:searchText">
+      <img ng-src="{{p.image}}" alt="{{p.name}}">
+      <h3>{{p.name}}</h3>
+      <p>{{p.category}}</p>
+      <p class="price">₹{{p.price}}</p>
+
+      <!-- ⭐ Rating System -->
+      <div>
+        <span ng-repeat="star in [1,2,3,4,5]"
+              ng-click="rateProduct(p, star)"
+              ng-class="{'star': true, 'selected': star <= p.rating}">★</span>
+        <p>Rating: {{p.rating}}/5</p>
+      </div>
+
+      <button class="btn" ng-click="addToCart(p)">Add to Cart</button>
+      <button class="wishlist-btn" ng-click="toggleWishlistItem(p)">
+        {{isInWishlist(p) ? '💔' : '❤️'}}
+      </button>
+    </div>
+  </div>
+
+  <!-- Cart Panel -->
+  <div class="cart" ng-class="{'open': cartOpen}">
+    <h3>🛒 My Cart</h3>
+    <div ng-repeat="item in cart">
+      <p>{{item.name}} - ₹{{item.price}} x {{item.qty}}</p>
+      <button class="btn" ng-click="increaseQty(item)">+</button>
+      <button class="btn" ng-click="decreaseQty(item)">-</button>
+      <button class="btn" ng-click="removeFromCart(item)">Remove</button>
+      <hr>
+    </div>
+    <p><strong>Total: ₹{{getTotal()}}</strong></p>
+  </div>
+
+  <!-- Wishlist Panel -->
+  <div class="wishlist" ng-class="{'open': wishlistOpen}">
+    <h3>❤️ Wishlist</h3>
+    <div ng-repeat="item in wishlist">
+      <p>{{item.name}} - ₹{{item.price}}</p>
+      <button class="btn" ng-click="addToCart(item)">Add to Cart</button>
+      <button class="btn" ng-click="toggleWishlistItem(item)">Remove</button>
+      <hr>
+    </div>
+  </div>
+
+  <div class="pagination">
+    <button class="btn" ng-click="prevPage()" ng-disabled="currentPage === 1">Previous</button>
+    Page {{currentPage}} of {{totalPages}}
+    <button class="btn" ng-click="nextPage()" ng-disabled="currentPage === totalPages">Next</button>
+  </div>
+
+  <script>
+    const app = angular.module("productApp", []);
+
+    app.controller("ProductController", function($scope) {
+      $scope.darkMode = JSON.parse(localStorage.getItem("darkMode")) || false;
+      $scope.toggleMode = function() {
+        $scope.darkMode = !$scope.darkMode;
+        localStorage.setItem("darkMode", $scope.darkMode);
+      };
+
+      $scope.products = [
+        { name: "Laptop", category: "Electronics", price: 95000, image: "https://via.placeholder.com/200x150?text=Laptop", rating: 4 },
+        { name: "Headphones", category: "Electronics", price: 2500, image: "https://via.placeholder.com/200x150?text=Headphones", rating: 3 },
+        { name: "Smartwatch", category: "Electronics", price: 4500, image: "https://via.placeholder.com/200x150?text=Smartwatch", rating: 5 },
+        { name: "T-Shirt", category: "Fashion", price: 800, image: "https://via.placeholder.com/200x150?text=T-Shirt", rating: 4 },
+        { name: "Jeans", category: "Fashion", price: 1200, image: "https://via.placeholder.com/200x150?text=Jeans", rating: 3 },
+        { name: "Shoes", category: "Fashion", price: 2200, image: "https://via.placeholder.com/200x150?text=Shoes", rating: 5 },
+        { name: "Mobile", category: "Electronics", price: 25000, image: "https://via.placeholder.com/200x150?text=Mobile", rating: 4 },
+        { name: "Earbuds", category: "Electronics", price: 1500, image: "https://via.placeholder.com/200x150?text=Earbuds", rating: 4 },
+        { name: "Dress", category: "Fashion", price: 1500, image: "https://via.placeholder.com/200x150?text=Dress", rating: 5 }
+      ];
+
+      $scope.categories = [...new Set($scope.products.map(p => p.category))];
+      $scope.selectedCategory = "All";
+      $scope.sortOption = "none";
+      $scope.maxPrice = 100000;
+      $scope.currentPage = 1;
+      $scope.itemsPerPage = 6;
+
+      $scope.cart = JSON.parse(localStorage.getItem("cart")) || [];
+      $scope.wishlist = JSON.parse(localStorage.getItem("wishlist")) || [];
+
+      $scope.cartOpen = false;
+      $scope.wishlistOpen = false;
+      $scope.toggleCart = () => $scope.cartOpen = !$scope.cartOpen;
+      $scope.toggleWishlist = () => $scope.wishlistOpen = !$scope.wishlistOpen;
+
+      // ⭐ Rating function
+      $scope.rateProduct = function(product, rating) {
+        product.rating = rating;
+      };
+
+      $scope.applyFilters = function() {
+        let filtered = $scope.products.filter(p =>
+          ($scope.selectedCategory === "All" || p.category === $scope.selectedCategory) &&
+          p.price <= $scope.maxPrice
+        );
+        if ($scope.sortOption === "priceLow") filtered.sort((a,b)=>a.price-b.price);
+        if ($scope.sortOption === "priceHigh") filtered.sort((a,b)=>b.price-a.price);
+        if ($scope.sortOption === "ratingHigh") filtered.sort((a,b)=>b.rating-a.rating);
+        $scope.filteredProducts = filtered;
+        $scope.paginate();
+      };
+
+      $scope.paginate = function() {
+        $scope.totalPages = Math.ceil($scope.filteredProducts.length / $scope.itemsPerPage);
+        let start = ($scope.currentPage - 1) * $scope.itemsPerPage;
+        $scope.paginatedProducts = $scope.filteredProducts.slice(start, start + $scope.itemsPerPage);
+      };
+
+      $scope.nextPage = function() {
+        if ($scope.currentPage < $scope.totalPages) { $scope.currentPage++; $scope.paginate(); }
+      };
+      $scope.prevPage = function() {
+        if ($scope.currentPage > 1) { $scope.currentPage--; $scope.paginate(); }
+      };
+
+      $scope.addToCart = function(p) {
+        let existing = $scope.cart.find(i => i.name === p.name);
+        if (existing) existing.qty++;
+        else $scope.cart.push({ ...p, qty: 1 });
+        localStorage.setItem("cart", JSON.stringify($scope.cart));
+      };
+
+      $scope.removeFromCart = function(p) {
+        $scope.cart = $scope.cart.filter(i => i.name !== p.name);
+        localStorage.setItem("cart", JSON.stringify($scope.cart));
+      };
+
+      $scope.increaseQty = function(p) { p.qty++; localStorage.setItem("cart", JSON.stringify($scope.cart)); };
+      $scope.decreaseQty = function(p) { if (p.qty > 1) p.qty--; else $scope.removeFromCart(p);
+         localStorage.setItem("cart", JSON.stringify($scope.cart)); };
+      $scope.getTotal = function() { return $scope.cart.reduce((sum, item) => sum + (item.price * item.qty), 0); };
+
+      $scope.toggleWishlistItem = function(p) {
+        if ($scope.isInWishlist(p))
+          $scope.wishlist = $scope.wishlist.filter(i => i.name !== p.name);
+        else $scope.wishlist.push(p);
+        localStorage.setItem("wishlist", JSON.stringify($scope.wishlist));
+      };
+      $scope.isInWishlist = function(p) { return $scope.wishlist.some(i => i.name === p.name); };
+
+      $scope.applyFilters();
+    });
+  </script>
+</body>
+</html>
